@@ -1,0 +1,33 @@
+{
+  "name": "@oibus/opc-classic-windows",
+  "version": "0.1.0",
+  "description": "Windows-only OPC Classic (DA/HDA) driver for OIBus. Spawns and multiplexes connections over a bundled .NET helper (Quick.OpcNetApi/OpcComRcw DCOM interop) via a stdio JSON protocol.",
+  "license": "EUPL-1.2",
+  "author": "Optimistik SAS",
+  "homepage": "https://github.com/OptimistikSAS/opc-classic#readme",
+  "bugs": "https://github.com/OptimistikSAS/opc-classic/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OptimistikSAS/opc-classic.git"
+  },
+  "keywords": ["oibus", "opc", "opc-classic", "opc-da", "opc-hda", "dcom", "windows"],
+  "os": ["win32"],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "runtimes"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test src/**/*.spec.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

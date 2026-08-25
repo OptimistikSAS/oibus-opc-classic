@@ -1,0 +1,57 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # Writes an .npmrc pointing at the public npm registry, authenticated via NODE_AUTH_TOKEN.
+          registry-url: 'https://registry.npmjs.org'
+
+      # One self-contained, single-file build per architecture, copied into runtimes/<rid>/ —
+      # exactly the layout resolveOpcBinaryPath() expects, and what package.json's "files" ships.
+      - name: Build the .NET helper for win-x64
+        run: |
+          dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish/win-x64
+          New-Item -ItemType Directory -Force runtimes/win-x64
+          Copy-Item publish/win-x64/OIBusOpcClassicWindows.exe runtimes/win-x64/
+
+      - name: Build the .NET helper for win-x86
+        run: |
+          dotnet publish -c Release -r win-x86 --self-contained -p:PublishSingleFile=true -o publish/win-x86
+          New-Item -ItemType Directory -Force runtimes/win-x86
+          Copy-Item publish/win-x86/OIBusOpcClassicWindows.exe runtimes/win-x86/
+
+      - name: Build the .NET helper for win-arm64
+        run: |
+          dotnet publish -c Release -r win-arm64 --self-contained -p:PublishSingleFile=true -o publish/win-arm64
+          New-Item -ItemType Directory -Force runtimes/win-arm64
+          Copy-Item publish/win-arm64/OIBusOpcClassicWindows.exe runtimes/win-arm64/
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build the TypeScript package
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
