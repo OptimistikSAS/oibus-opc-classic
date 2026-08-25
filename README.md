@@ -73,6 +73,36 @@ instead of retrying a dead COM object.
 dictionary; a caller is expected to `connect()` explicitly first and to own its own reconnect policy
 on failure, rather than relying on every read/browse silently reconnecting behind its back.
 
+## Works inside a `pkg`-bundled application too
+
+If the calling application is itself bundled into a single executable with
+[`pkg`](https://github.com/vercel/pkg) or [`@yao-pkg/pkg`](https://github.com/yao-pkg/pkg),
+`resolveOpcBinaryPath()` handles that automatically — but it's worth knowing why, since it's not
+obvious and was only found by actually building and running a pkg-bundled test app against this
+package, not by inspection.
+
+Inside a pkg bundle, paths resolved relative to `__dirname` point into pkg's virtual snapshot
+filesystem (something like `C:\snapshot\...`). Reading such a path with `fs` works fine — pkg patches
+`fs` to understand it — but `child_process.spawn()` does not: the OS process-creation call needs a
+real file on the real filesystem, and a snapshot path isn't one. Confirmed directly: spawning the
+helper straight from its snapshot path fails with `ENOENT`, even though `fs.readFileSync` on that
+exact path succeeds. So when `process.pkg` is set (pkg's own marker for "running inside a bundle"),
+`resolveOpcBinaryPath()` copies the embedded binary out to a real file under `os.tmpdir()` first and
+returns that path instead — written via a per-process temp name and an atomic rename into place, so
+two pkg-bundled instances of the calling application starting around the same time on the same
+machine (a real scenario — e.g. two separate Windows services, both using this package) can't observe
+or spawn a partially-written file.
+
+The consuming application still needs to tell `pkg` to actually embed the runtime binaries in the
+first place — they won't be picked up automatically. Add this package's `runtimes` folder to the
+consuming application's own `pkg.assets` in its `package.json`:
+
+```json
+"pkg": {
+  "assets": ["node_modules/@oibus/opc-classic/runtimes/**/*"]
+}
+```
+
 ## DA vs HDA
 
 `mode` (`'da'` | `'hda'`) is a `connect`-time parameter — it picks `Opc.Da.Server` or `Opc.Hda.Server`
@@ -130,26 +160,36 @@ Requires Windows, the .NET 9 SDK, and the Node/npm versions pinned in `package.j
 field.
 
 ```bash
-npm install            # dev dependencies (typescript, tsx, @types/node)
-npm run build          # tsc -> dist/index.js + dist/index.d.ts
-npm test                # runs src/**/*.spec.ts against a fake child process (no real OPC server needed)
-dotnet build            # compiles the .NET helper for local testing (bin/Debug/net9.0-windows/...)
+npm install             # dev dependencies (typescript, tsx, @types/node)
+npm run build           # tsc -> dist/index.js + dist/index.d.ts
+npm test                 # runs src/**/*.spec.ts against a fake child process (no real OPC server needed)
+dotnet build             # compiles the .NET helper for quick local testing (bin/Debug/net9.0-windows/...)
 ```
 
-To exercise the helper against a real OPC server without going through the TS layer, pipe
-newline-delimited JSON commands directly at the built exe (see [Protocol](#protocol) above), or set
-`OIBUS_OPC_CLASSIC_WINDOWS_BINARY` to point `resolveOpcBinaryPath()` at a specific build:
+`dotnet build` is enough to iterate on the .NET side quickly, but its output isn't in the layout
+`resolveOpcBinaryPath()` expects at runtime (`runtimes/<rid>/`). Two ways to bridge that:
 
-```bash
-$env:OIBUS_OPC_CLASSIC_WINDOWS_BINARY = "$(pwd)\bin\Debug\net9.0-windows\OIBusOpcClassicWindows.exe"
-```
+- Point `resolveOpcBinaryPath()` at the `dotnet build` output directly, for fast iteration:
+  ```bash
+  $env:OIBUS_OPC_CLASSIC_WINDOWS_BINARY = "$(pwd)\bin\Debug\net9.0-windows\OIBusOpcClassicWindows.exe"
+  ```
+- Or build a real self-contained binary into `runtimes/<rid>/`, matching what a published install
+  actually ships (see [Release](#release) below):
+  ```bash
+  npm run build:win-x64    # or build:win-x86, build:win-arm64, or build:runtimes for all three
+  ```
+
+To exercise the helper directly without going through the TS layer at all, pipe newline-delimited
+JSON commands at the built exe (see [Protocol](#protocol) above).
 
 ## Release
 
 Releases are cut by pushing a `v*` tag (e.g. `v0.1.1`) — see `.github/workflows/publish.yml`. That
 workflow, on a Windows runner:
 
-1. `dotnet publish` for `win-x64`, `win-x86`, and `win-arm64` into `runtimes/<rid>/`.
+1. `npm run build:runtimes` — runs `build:win-x64`/`build:win-x86`/`build:win-arm64` (each a plain
+   `dotnet publish -r <rid> --self-contained -p:PublishSingleFile=true -o runtimes/<rid>`), so the
+   same commands can be run locally to reproduce exactly what CI ships.
 2. `npm run build` (the TypeScript side).
 3. `npm publish` (scoped public package — `publishConfig.access` in `package.json` is already set
    to `"public"`, so no `--access` flag is needed at publish time).

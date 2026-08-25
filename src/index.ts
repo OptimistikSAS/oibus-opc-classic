@@ -1,5 +1,7 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
@@ -68,6 +70,15 @@ const ARCH_FOLDERS: Partial<Record<NodeJS.Architecture, string>> = {
  * Resolves the bundled OIBusOpcClassicWindows helper binary for the current architecture.
  * Overridable via OIBUS_OPC_CLASSIC_WINDOWS_BINARY (used by this package's own tests, and by anyone
  * running a custom build during development).
+ *
+ * When the calling application is itself bundled with `pkg` (or `@yao-pkg/pkg`), `__dirname`-relative
+ * paths resolve inside pkg's virtual snapshot filesystem (something like `C:\snapshot\...`) — `fs`
+ * reads from that path work fine (pkg patches `fs` to understand it), but `child_process.spawn()`
+ * cannot: the OS process-creation call needs a real file on the real filesystem, and a snapshot path
+ * isn't one (confirmed directly: spawning straight from the snapshot path fails with `ENOENT`, even
+ * though the same path reads fine via `fs.readFileSync`). So under `pkg` specifically (detected via
+ * the `process.pkg` flag `pkg` sets on the running process — a no-op check outside of a pkg bundle),
+ * the binary is copied out to a real temp directory once per process and spawned from there instead.
  */
 export function resolveOpcBinaryPath(): string {
   const override = process.env.OIBUS_OPC_CLASSIC_WINDOWS_BINARY;
@@ -78,7 +89,30 @@ export function resolveOpcBinaryPath(): string {
   if (!archFolder) {
     throw new Error(`Unsupported architecture for the OPC Classic Windows helper: ${process.arch}`);
   }
-  return path.join(__dirname, '..', 'runtimes', archFolder, 'OIBusOpcClassicWindows.exe');
+  const bundledPath = path.join(__dirname, '..', 'runtimes', archFolder, 'OIBusOpcClassicWindows.exe');
+  return extractFromPkgSnapshotIfNeeded(bundledPath);
+}
+
+/**
+ * Exported (not just internal) so this package's own tests can exercise it directly against a safe
+ * scratch path — not part of the package's public API for consumers.
+ */
+export function extractFromPkgSnapshotIfNeeded(bundledPath: string): string {
+  if (!('pkg' in process)) {
+    return bundledPath;
+  }
+  const extractedPath = path.join(os.tmpdir(), 'oibus-opc-classic', path.basename(bundledPath));
+  fs.mkdirSync(path.dirname(extractedPath), { recursive: true });
+  // Two OIBus instances on the same machine (e.g. a production service and a "Test" service
+  // instance, both pkg-bundled) can both hit this on startup around the same time, both extracting
+  // to this same fixed path. Copy to a per-process-unique temp name first, then rename into place —
+  // a rename is atomic on the same volume on both Windows and POSIX, so a second instance can never
+  // observe (or spawn) a partially-written file the way a direct copyFileSync to the final path
+  // could let it.
+  const tempPath = `${extractedPath}.${process.pid}.tmp`;
+  fs.copyFileSync(bundledPath, tempPath);
+  fs.renameSync(tempPath, extractedPath);
+  return extractedPath;
 }
 
 interface PendingRequest {

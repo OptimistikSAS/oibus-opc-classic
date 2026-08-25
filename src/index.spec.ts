@@ -2,7 +2,10 @@ import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { OpcBridge, OpcConnection, __resetSharedBridgeForTesting, resolveOpcBinaryPath } from './index';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { OpcBridge, OpcConnection, __resetSharedBridgeForTesting, extractFromPkgSnapshotIfNeeded, resolveOpcBinaryPath } from './index';
 
 /** A fake child process good enough to drive readline + event listeners the same way a real one would. */
 class FakeChildProcess extends EventEmitter {
@@ -55,6 +58,37 @@ describe('OpcBridge', () => {
       } finally {
         Object.defineProperty(process, 'arch', { value: originalArch });
       }
+    });
+  });
+
+  // Confirmed directly against a real @yao-pkg/pkg-bundled executable: spawning straight from a
+  // pkg snapshot path (e.g. `C:\snapshot\...\OIBusOpcClassicWindows.exe`) fails with ENOENT even
+  // though the same path reads fine via `fs.readFileSync` — the OS process-creation call needs a
+  // real file, not pkg's virtual filesystem. Exercised here against a throwaway scratch path (not
+  // the package's own real `runtimes/` folder) so this test can't clobber a real build artifact if
+  // it happens to run after `npm run build:win-*` has already populated that folder.
+  describe('extractFromPkgSnapshotIfNeeded', () => {
+    const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opc-classic-pkg-test-'));
+    const bundledPath = path.join(scratchDir, 'OIBusOpcClassicWindows.exe');
+
+    beforeEach(() => {
+      fs.writeFileSync(bundledPath, 'fake binary contents');
+    });
+
+    afterEach(() => {
+      delete (process as unknown as { pkg?: unknown }).pkg;
+    });
+
+    it('returns the bundled path unchanged outside of a pkg bundle', () => {
+      assert.strictEqual(extractFromPkgSnapshotIfNeeded(bundledPath), bundledPath);
+    });
+
+    it('copies the binary to a real temp file and returns that path when running under pkg', () => {
+      (process as unknown as { pkg?: unknown }).pkg = {};
+      const resolved = extractFromPkgSnapshotIfNeeded(bundledPath);
+      assert.notStrictEqual(resolved, bundledPath);
+      assert.ok(resolved.includes('oibus-opc-classic'));
+      assert.strictEqual(fs.readFileSync(resolved, 'utf8'), 'fake binary contents');
     });
   });
 
