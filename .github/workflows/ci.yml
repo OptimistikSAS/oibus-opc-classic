@@ -17,9 +17,9 @@ jobs:
         with:
           dotnet-version: '9.0.x'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version-file: package.json
 
       - name: Build the .NET helper
         run: dotnet build -c Release

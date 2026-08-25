@@ -5,14 +5,14 @@ using Opc;
 using DAServer = Opc.Da.Server;
 using HDAServer = Opc.Hda.Server;
 
-// A single process shared by every OIBus south-opc connector in the running OIBus instance (see
-// @oibus/opc-classic-windows's OpcBridge/OpcConnection). Unlike PI (one shared global PIServer),
-// each logical connection here gets its own real Opc.Server — matching OIBusAgentWindows's own
-// OPCService.cs Dictionary<string, Server> exactly, since different OPC connectors can genuinely
-// target different servers/hosts/modes.
+// A single process shared by every caller of this package's OpcBridge/OpcConnection. Each logical
+// connection gets its own real Opc.Server, keyed by a UUID `id` — different connections can
+// genuinely target different servers/hosts/modes, so there's no single shared server to fall back
+// to.
 //
-// Commands on the same connection id run in the order they arrived (see oledb-windows's Program.cs
-// for why naive concurrent dispatch is wrong); commands on different ids run concurrently. Every
+// Naive concurrent dispatch (a bare Task.Run per incoming line) lets commands for the *same*
+// connection race and execute out of order; commands on the same connection id must instead run in
+// the order they arrived, while commands on different ids are free to run fully concurrently. Every
 // request/response carries a `requestId` for out-of-order correlation.
 var servers = new ConcurrentDictionary<string, Opc.Server>();
 var lastOperationByConnection = new ConcurrentDictionary<string, Task>();
@@ -29,8 +29,7 @@ while ((line = Console.In.ReadLine()) != null)
 }
 
 // Drain everything currently chained per connection before actually exiting — a short-lived piped
-// run could otherwise hit stdin EOF and return before its own dispatched work executed (found by
-// testing on @oibus/pi-afsdk-windows; the same fix is applied here from the start).
+// run could otherwise hit stdin EOF and return before its own dispatched work executed.
 await Task.WhenAll(lastOperationByConnection.Values.ToArray());
 return 0;
 
@@ -94,10 +93,9 @@ void WriteResponse(JsonObject response, string? requestId)
     }
 }
 
-// Mirrors OIBusAgentWindows's OPCService.Connect exactly: idempotent (skips Connect() if already
-// connected), lazily creates the server object on first call per id, and on any connect failure
-// disposes the server and evicts it from the dictionary so the next attempt starts from a fresh
-// DCOM activation instead of retrying a dead COM object.
+// Idempotent (skips Connect() if already connected), lazily creates the server object on first call
+// per id, and on any connect failure disposes the server and evicts it from the dictionary so the
+// next attempt starts from a fresh DCOM activation instead of retrying a dead COM object.
 JsonObject HandleConnect(string id, JsonObject request)
 {
     var host = request["host"]!.GetValue<string>();
@@ -136,11 +134,9 @@ JsonObject HandleConnect(string id, JsonObject request)
     return new JsonObject { ["ok"] = true, ["serverInfo"] = GetServerInfo(server!) };
 }
 
-// {vendorInfo, productVersion, serverState} off the server's own GetStatus() — same fields
-// OIBusAgentWindows's GetStatus endpoint exposed (minus the HDA-only aggregate list, which the
-// south connector doesn't need). Opc.Da.ServerStatus and Opc.Hda.ServerStatus are two unrelated
-// types (not a shared base), but expose the same field names by convention — same reason the
-// original agent's own GetStatus() branches on DA vs HDA instead of using one shared type.
+// {vendorInfo, productVersion, serverState} off the server's own GetStatus() call. Opc.Da.ServerStatus
+// and Opc.Hda.ServerStatus are two unrelated types (not a shared base), but expose the same field
+// names by convention, so both branches extract the same three fields.
 JsonObject GetServerInfo(Opc.Server server)
 {
     if (server is HDAServer hdaServer)
@@ -183,11 +179,10 @@ JsonObject HandleRead(string id, JsonObject request)
     return new JsonObject { ["values"] = values };
 }
 
-// Ported from OIBusAgentWindows's ReadDAValues: one synchronous bulk Read() call, no paging (DA
-// only ever returns current/live values, never a backlog). No item name mapping here — the raw
-// `nodeId` goes straight into each value, same as ReadHdaValues below; the south connector maps it
-// back to its own item using `nodeId`, the same division of responsibility @oibus/pi-afsdk-windows
-// uses for raw PI point names.
+// One synchronous bulk Read() call, no paging — DA only ever returns current/live values, never a
+// backlog. No item name mapping here: the raw `nodeId` goes straight into each value, same as
+// ReadHdaValues below — callers are expected to map it back to whatever identifier they used to
+// request it, since this helper never sees anything beyond the node id itself.
 void ReadDaValues(DAServer server, string[] nodeIds, JsonArray values)
 {
     var itemsToRead = nodeIds.Select(nodeId => new Opc.Da.Item(new ItemIdentifier(nodeId))).ToArray();
@@ -208,11 +203,11 @@ void ReadDaValues(DAServer server, string[] nodeIds, JsonArray values)
     }
 }
 
-// Ported from OIBusAgentWindows's ReadHDAValues, including its manual pagination: HDA queries over
-// a wide time range can return more values than fit in one response (`ResultID.Hda.S_MOREDATA`), so
-// this loops — resuming from the minimum "max time seen so far" across items that still have more
-// data, releasing items that are fully drained, and sleeping `intervalReadDelay` ms between pages
-// (a deliberate pacing choice from the original agent, not a bug) — until nothing has more data.
+// Manual pagination: HDA queries over a wide time range can return more values than fit in one
+// response (`ResultID.Hda.S_MOREDATA`), so this loops — resuming from the minimum "max time seen so
+// far" across items that still have more data, releasing items that are fully drained, and sleeping
+// `intervalReadDelay` ms between pages (a deliberate pacing choice, not a bug) — until nothing has
+// more data.
 void ReadHdaValues(
     HDAServer server,
     string startTime,
@@ -381,15 +376,15 @@ JsonObject HandleDisconnect(string id)
 {
     if (!servers.TryRemove(id, out var server))
     {
-        return new JsonObject { ["ok"] = true }; // already disconnected — not an error, matches PI/OLEDB's tolerance
+        return new JsonObject { ["ok"] = true }; // already disconnected — treated as success, not an error
     }
     server.Disconnect();
     server.Dispose();
     return new JsonObject { ["ok"] = true };
 }
 
-// Same 25-value mapping as OIBusAgentWindows's getAggregateId — any unrecognized aggregate name
-// (including a genuinely invalid one) defaults to 0 (raw), matching the original's own behavior.
+// Maps an aggregate name to the OPC HDA aggregate ID it corresponds to. Any unrecognized aggregate
+// name (including a genuinely invalid one) defaults to 0 (raw).
 int GetAggregateId(string aggregate) => aggregate switch
 {
     "raw" => 0,
@@ -420,10 +415,9 @@ int GetAggregateId(string aggregate) => aggregate switch
     _ => 0
 };
 
-// Same mapping as OIBusAgentWindows's getResampleInterval. Deliberately defaults to 0 ("none") for
-// any unrecognized value — this is what already made the manifest's own historical `'raw'`-as-a-
-// resampling-default bug harmless: 'raw' was never a valid case here either, so it always fell
-// through to "no resampling" anyway. No migration needed for existing items with that stored value.
+// Maps a resampling name to the interval (in seconds) OPC HDA's ReadProcessed expects. Deliberately
+// defaults to 0 ("none") for any unrecognized value, so an invalid or missing resampling setting
+// degrades to "no resampling" rather than throwing.
 decimal GetResampleInterval(string resampling) => resampling switch
 {
     "none" => 0,
