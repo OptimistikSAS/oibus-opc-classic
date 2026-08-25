@@ -8,6 +8,9 @@ on:
 jobs:
   publish:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write # required for npm Trusted Publishing (OIDC) — no NPM_TOKEN secret needed
 
     steps:
       - uses: actions/checkout@v7
@@ -19,7 +22,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: package.json
-          # Writes an .npmrc pointing at the public npm registry, authenticated via NODE_AUTH_TOKEN.
+          # Writes an .npmrc pointing at the public npm registry. No NODE_AUTH_TOKEN needed —
+          # npm CLI >=11.5.1 exchanges this job's OIDC token (via the id-token: write permission
+          # above) for a short-lived publish credential, once Trusted Publishing is configured
+          # for this package on npmjs.com.
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install npm dependencies
@@ -39,6 +45,4 @@ jobs:
         run: npm test
 
       - name: Publish to npm
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance

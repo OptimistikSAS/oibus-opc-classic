@@ -20,7 +20,7 @@
   },
   "engines": {
     "node": "=v26",
-    "npm": "=11"
+    "npm": ">=11.5.1"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
