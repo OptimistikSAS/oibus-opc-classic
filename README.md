@@ -9,6 +9,16 @@ Instead of installing a separate, long-running Windows Service to reach an OPC C
 calling process spawns this package's helper itself as a local child process on demand, talks to it
 over a small stdio JSON protocol, and can stop it again once it's no longer needed.
 
+## License & third-party notices
+
+This repository's own source (`Program.cs`, `src/`) is licensed under the EUPL-1.2 — see
+[LICENSE](LICENSE). The published Windows binaries additionally embed OPC Foundation's OPC
+Classic .NET API / RCW redistributables (via the `Quick.OpcNetApi`/`Quick.OpcComRcw`/
+`Quick.OpcNetApi.Com` NuGet packages), which remain under the separate **OPC Foundation
+Redistributables Agreement v1.3** and are not covered by the EUPL — see
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the full notice and the obligations that
+flow down to anyone redistributing this package or software built on it.
+
 ## Install
 
 ```bash
