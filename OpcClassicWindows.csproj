@@ -18,6 +18,10 @@
     <AssemblyName>OIBusOpcClassicWindows</AssemblyName>
     <RootNamespace>OIBusOpcClassicWindows</RootNamespace>
     <InvariantGlobalization>false</InvariantGlobalization>
+    <Product>OIBus OPC Classic Windows Helper</Product>
+    <Company>Optimistik SAS</Company>
+    <Copyright>Copyright (c) 2026 Optimistik SAS</Copyright>
+    <Description>Includes OPC Foundation OPC Classic .NET API/RCW redistributables — see THIRD-PARTY-NOTICES.md</Description>
   </PropertyGroup>
 
   <ItemGroup>
