@@ -19,8 +19,8 @@
     "access": "public"
   },
   "engines": {
-    "node": "=v26",
-    "npm": ">=11.5.1"
+    "node": "26.12.1",
+    "npm": "11.20.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
