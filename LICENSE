@@ -3,9 +3,12 @@
 Copyright (c) 2026 Optimistik SAS
 
 This licence applies to the original source code of this repository (Optimistik SAS's own work).
-The Windows binaries this package publishes additionally embed third-party OPC Foundation
-redistributables that remain under their own separate license and are not covered by the EUPL —
-see THIRD-PARTY-NOTICES.md.
+The Windows binaries this package publishes additionally embed third-party components that remain
+under their own licenses and are not covered by the EUPL: the OPC Foundation OPC Classic .NET API
+and RCWs (OPC Foundation MIT License 1.00, Copyright (c) 2005-2026, OPC Federation AISBL) and the
+.NET runtime (MIT, Copyright (c) .NET Foundation and Contributors) — see THIRD-PARTY-NOTICES.md.
+The OPC Core Components are not included and must be installed separately. This project is not
+affiliated with or endorsed by the OPC Foundation.
 
 This European Union Public Licence (the ‘EUPL’) applies to the Work (as defined below) which is provided under the terms of this Licence. Any use of the Work, other than as authorised under this Licence is prohibited (to the extent such use is covered by a right of the copyright holder of the Work). The Work is provided under the terms of this Licence when the Licensor (as defined below) has placed the following notice immediately following the copyright notice for the Work: Licensed under the EUPL or has expressed by any other means his willingness to license under the EUPL.
 

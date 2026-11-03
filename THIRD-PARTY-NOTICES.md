@@ -1,42 +1,101 @@
 # Third-Party Notices
 
-This package's original source code (`Program.cs`, `src/`) is licensed under the EUPL-1.2 —
-see [LICENSE](LICENSE). The built Windows binaries it publishes (`OIBusOpcClassicWindows.exe`,
-one per architecture under `runtimes/<rid>/`) additionally embed the components described below,
-which are **not** covered by the EUPL-1.2 and remain under their own license.
+This package's original source code (`Program.cs`, `src/`, build scripts) is licensed under the
+EUPL-1.2 — see [LICENSE](LICENSE). The built Windows binaries it publishes
+(`OIBusOpcClassicWindows.exe`, one per architecture under `runtimes/<rid>/`) additionally embed the
+third-party components listed below. They are **not** covered by the EUPL-1.2 and remain under
+their own licenses, reproduced here.
 
-## OPC Foundation OPC Classic .NET API / RCW redistributables
+This project is an independent implementation. It is **not affiliated with, sponsored by, or
+endorsed by the OPC Foundation**, and it is not certified by the OPC Foundation. "OPC" and
+"OPC Foundation" are trademarks of the OPC Foundation, used here only to describe the protocols
+and components this package interoperates with.
 
-`OpcClassicWindows.csproj` references the NuGet packages `Quick.OpcNetApi`, `Quick.OpcComRcw`, and
-`Quick.OpcNetApi.Com` (v2.1.108), which package OPC Foundation's official OPC Classic .NET API and
-DCOM Runtime Callable Wrapper (RCW) interop assemblies for OPC DA/HDA. Because the helper is
-published self-contained with `PublishSingleFile=true` (see `package.json`'s `build:win-*`
-scripts), these managed assemblies are embedded directly into the single-file
-`OIBusOpcClassicWindows.exe` for each platform.
+## OPC Foundation OPC Classic .NET API and RCWs (`OpcNetApi`, `OpcNetApi.Com`, `OpcComRcw`)
 
-Copyright © OPC Foundation. All rights reserved.
+The helper is built against the OPC Foundation's OPC Classic .NET API (`OpcNetApi`), its COM
+wrapper (`OpcNetApi.Com`) and the OPC Classic Runtime Callable Wrapper (`OpcComRcw`). They are
+compiled from source, from the `DotNetRCWs/` directory of the OPC Foundation's
+[OPC-Classic-CoreComponents](https://github.com/OPCF-Members/OPC-Classic-CoreComponents)
+repository, pinned as the git submodule `vendor/OPC-Classic-CoreComponents` (see `.gitmodules` and
+the submodule's commit for the exact revision). Because the helper is published self-contained with
+`PublishSingleFile=true` (see `package.json`'s `build:win-*` scripts), these managed assemblies are
+embedded in each `OIBusOpcClassicWindows.exe`. They are used unmodified.
 
-Use and redistribution of these components is governed by the **OPC Foundation Redistributables
-Agreement, v1.3**: https://opcfoundation.org/license/redistributables/1.3/
+Each `runtimes/<rid>/` folder also carries this license as `OPC-Foundation-LICENSE.md`.
 
-That agreement requires, among other things:
+```text
+## MIT License
 
-- OPC Foundation's copyright and trademark notices must be preserved (this notice satisfies that
-  for this package).
-- The distributor's own copyright notice must accompany distributed programs (see `LICENSE` and
-  the `Copyright`/`Company` metadata embedded in `OIBusOpcClassicWindows.exe`).
-- **Anyone who further redistributes this package, or any software that includes it (including
-  OIBus itself), must preserve this notice and require their own distributees and end users to
-  agree to terms that protect the OPC Foundation at least as much as that Agreement.**
-- The OPC Foundation's redistributed code must never be modified or distributed in a way that
-  subjects it to an "Excluded License" — a license (such as the EUPL, GPL, or similar copyleft
-  terms) that would require its source to be disclosed or that would grant others the right to
-  modify it. This package only *references* the OPC Foundation redistributables via NuGet
-  (`PackageReference`); it does not vendor or modify their source, and the EUPL-1.2 licensing this
-  repository's own source under does not extend to them.
-- OPC Foundation trademarks may not be used in a way that suggests endorsement by, or origin from,
-  the OPC Foundation. This project is an independent implementation and is not certified or
-  endorsed by the OPC Foundation.
+Copyright (c) 2005-2026, OPC Federation AISBL, All rights reserved.
 
-The OPC Foundation deliverables are provided "AS-IS", without warranty of any kind, per the terms
-of that Agreement.
+OPC Foundation MIT License 1.00
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+The complete license agreement can be found here:
+http://opcfoundation.org/License/MIT/1.00/
+```
+
+### OPC Core Components are not included
+
+This package does **not** include or redistribute the native OPC Classic Core Components (the OPC
+proxy/stub DLLs, `OpcEnum`, and related COM registrations). They must be installed separately on
+the machine running this package, using the OPC Foundation's own signed installer (or the one
+supplied by your OPC server vendor). Their installation and use are governed by the OPC Foundation's
+terms for those components, not by this package.
+
+## .NET runtime
+
+The helper is published self-contained, so each `OIBusOpcClassicWindows.exe` embeds the .NET
+runtime (`Microsoft.NETCore.App`, .NET 10), licensed under the MIT License:
+
+```text
+The MIT License (MIT)
+
+Copyright (c) .NET Foundation and Contributors
+
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+The .NET runtime itself includes third-party components under their own licenses. Their notices
+are shipped next to each executable as `runtimes/<rid>/dotnet-runtime-THIRD-PARTY-NOTICES.txt`
+(with the license as `dotnet-runtime-LICENSE.txt`), copied at build time from the exact
+`Microsoft.NETCore.App` runtime pack embedded in that executable. They are also published at
+https://github.com/dotnet/runtime/blob/main/THIRD-PARTY-NOTICES.TXT.
