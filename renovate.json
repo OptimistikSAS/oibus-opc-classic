@@ -3,6 +3,7 @@
   "baseBranches": ["main"],
   "labels": ["dependencies"],
   "minimumReleaseAge": "5 days",
+  "npmrc": "force=true",
   "git-submodules": {
     "enabled": true
   },
