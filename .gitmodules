@@ -1,0 +1,3 @@
+[submodule "vendor/OPC-Classic-CoreComponents"]
+	path = vendor/OPC-Classic-CoreComponents
+	url = https://github.com/OPCF-Members/OPC-Classic-CoreComponents.git

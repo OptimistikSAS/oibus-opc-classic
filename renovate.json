@@ -3,6 +3,9 @@
   "baseBranches": ["main"],
   "labels": ["dependencies"],
   "minimumReleaseAge": "5 days",
+  "git-submodules": {
+    "enabled": true
+  },
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": ["before 3am on Monday"]

@@ -7,11 +7,14 @@ on:
 
 jobs:
   build-and-test:
-    # DCOM/COM interop and the Quick.OpcNetApi/OpcComRcw packages only exist on Windows.
+    # The helper targets net10.0-windows and talks to OPC servers over DCOM, which only exists on Windows.
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The OPC Foundation's OpcNetApi/OpcNetApi.Com/OpcComRcw sources, pinned as a git submodule.
+          submodules: true
 
       - uses: actions/setup-dotnet@v6
         with:

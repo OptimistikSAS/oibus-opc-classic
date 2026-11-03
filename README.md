@@ -1,7 +1,7 @@
 # @oibus/opc-classic
 
-A Windows-only npm package: a small .NET console app wrapping the `Quick.OpcNetApi`/`OpcComRcw`
-DCOM interop libraries (OPC Classic DA + HDA), plus the TypeScript driver (`src/index.ts`) that
+A Windows-only npm package: a small .NET console app wrapping the OPC Foundation's OPC Classic .NET
+API and RCWs (`OpcNetApi`/`OpcNetApi.Com`/`OpcComRcw`, DCOM interop for OPC Classic DA + HDA), plus the TypeScript driver (`src/index.ts`) that
 spawns and talks to it. A standalone driver for talking to OPC Classic DA/HDA servers from Node.js
 on Windows — no dependency on any other project.
 
@@ -12,12 +12,25 @@ over a small stdio JSON protocol, and can stop it again once it's no longer need
 ## License & third-party notices
 
 This repository's own source (`Program.cs`, `src/`) is licensed under the EUPL-1.2 — see
-[LICENSE](LICENSE). The published Windows binaries additionally embed OPC Foundation's OPC
-Classic .NET API / RCW redistributables (via the `Quick.OpcNetApi`/`Quick.OpcComRcw`/
-`Quick.OpcNetApi.Com` NuGet packages), which remain under the separate **OPC Foundation
-Redistributables Agreement v1.3** and are not covered by the EUPL — see
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the full notice and the obligations that
-flow down to anyone redistributing this package or software built on it.
+[LICENSE](LICENSE). The published Windows binaries additionally embed, unmodified and not covered
+by the EUPL:
+
+- the OPC Foundation's OPC Classic .NET API and RCWs (`OpcNetApi`, `OpcNetApi.Com`, `OpcComRcw`),
+  built from the OPC Foundation's
+  [OPC-Classic-CoreComponents](https://github.com/OPCF-Members/OPC-Classic-CoreComponents)
+  repository (pinned as the `vendor/OPC-Classic-CoreComponents` git submodule) and licensed under
+  the **OPC Foundation MIT License 1.00** (Copyright (c) 2005-2026, OPC Federation AISBL);
+- the .NET runtime (self-contained publish), licensed under the **MIT License** (Copyright (c)
+  .NET Foundation and Contributors), with its own third-party notices.
+
+The full license texts are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and each
+`runtimes/<rid>/` folder ships them next to the executable.
+
+The native **OPC Core Components** (proxy/stub DLLs, `OpcEnum`) are **not** included: install them
+separately on the target machine with the OPC Foundation's signed installer (or the one your OPC
+server vendor supplies).
+
+This project is not affiliated with or endorsed by the OPC Foundation.
 
 ## Install
 
@@ -26,7 +39,8 @@ npm install @oibus/opc-classic
 ```
 
 Windows only (`os: ["win32"]` in `package.json` — npm will refuse to install it on any other
-platform). Requires a real OPC Classic DA or HDA server reachable via DCOM (a local simulator like
+platform). Requires the OPC Core Components to be installed on the machine (see above), and a real
+OPC Classic DA or HDA server reachable via DCOM (a local simulator like
 the free Matrikon OPC Simulation server, or a real industrial OPC server) to actually connect to —
 this package is a client/driver, not a server.
 
@@ -38,12 +52,15 @@ const values = await connection.read('2024-01-01T00:00:00Z', '2024-01-02T00:00:0
 await connection.disconnect();
 ```
 
-## Framework: net9.0-windows, confirmed by live testing
+## Framework: net10.0-windows
 
-This package targets modern .NET (`net9.0-windows`) — confirmed by live testing against a real
-Matrikon OPC Simulation server, not assumed: `Quick.OpcComRcw`/`Quick.OpcNetApi`/`Quick.OpcNetApi.Com`
-ship `netstandard2.0`/`netstandard2.1` builds, and DA connect/read/browse worked immediately on
-net9.0-windows with no issues at all.
+The helper targets `net10.0-windows` (.NET 10, LTS) and builds the OPC Foundation's `OpcNetApi`,
+`OpcNetApi.Com` and `OpcComRcw` from source via `ProjectReference`s into the
+`vendor/OPC-Classic-CoreComponents` submodule, which multi-target `net10.0-windows` among others.
+
+The live testing described below against a Matrikon OPC Simulation server was done with an earlier
+`net9.0-windows` build that used third-party NuGet repackagings (`Quick.OpcNetApi` & co.) of the
+same OPC Foundation code; the TypeScript API and the stdio protocol are unchanged.
 
 HDA needed one real fix along the way, found by testing, not by inspection: `Matrikon.OPCHDA.Automation`
 (a *different* Matrikon product than the DA simulator) is registered as a 32-bit **in-process**
@@ -166,14 +183,24 @@ server's own `GetStatus()`) is gathered once on `connect` and carried on every `
 
 ## Development
 
-Requires Windows, the .NET 9 SDK, and the Node/npm versions pinned in `package.json`'s `engines`
-field.
+Requires Windows, the .NET 10 SDK, and the Node/npm versions pinned in `package.json`'s `engines`
+field. The OPC Foundation's .NET API/RCW sources come from a git submodule, so clone with
+submodules (or initialize them in an existing checkout):
+
+```bash
+git clone --recurse-submodules https://github.com/OptimistikSAS/oibus-opc-classic.git
+git submodule update --init   # in an existing checkout
+```
+
+To move to a newer upstream revision, check out the wanted commit in
+`vendor/OPC-Classic-CoreComponents` and commit the updated submodule pointer (Renovate also proposes
+submodule updates).
 
 ```bash
 npm install             # dev dependencies (typescript, tsx, @types/node)
 npm run build           # tsc -> dist/index.js + dist/index.d.ts
 npm test                 # runs src/**/*.spec.ts against a fake child process (no real OPC server needed)
-dotnet build             # compiles the .NET helper for quick local testing (bin/Debug/net9.0-windows/...)
+dotnet build             # compiles the .NET helper for quick local testing (bin/Debug/net10.0-windows/...)
 ```
 
 `dotnet build` is enough to iterate on the .NET side quickly, but its output isn't in the layout
@@ -181,7 +208,7 @@ dotnet build             # compiles the .NET helper for quick local testing (bin
 
 - Point `resolveOpcBinaryPath()` at the `dotnet build` output directly, for fast iteration:
   ```bash
-  $env:OIBUS_OPC_CLASSIC_WINDOWS_BINARY = "$(pwd)\bin\Debug\net9.0-windows\OIBusOpcClassicWindows.exe"
+  $env:OIBUS_OPC_CLASSIC_WINDOWS_BINARY = "$(pwd)\bin\Debug\net10.0-windows\OIBusOpcClassicWindows.exe"
   ```
 - Or build a real self-contained binary into `runtimes/<rid>/`, matching what a published install
   actually ships (see [Release](#release) below):

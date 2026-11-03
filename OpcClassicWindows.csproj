@@ -3,7 +3,12 @@
   <!--
     Windows-only helper spawned as a local child process by @oibus/opc-classic's TypeScript driver
     (see src/index.ts) and talked to over a newline-delimited JSON protocol on stdin/stdout. Wraps
-    Quick.OpcNetApi/OpcComRcw DCOM interop for OPC Classic DA + HDA.
+    the OPC Foundation's OPC Classic .NET API and RCWs (OpcNetApi, OpcNetApi.Com, OpcComRcw) for
+    OPC Classic DA + HDA over DCOM.
+
+    Those three assemblies are built from source, from the OPC Foundation's MIT-licensed
+    OPC-Classic-CoreComponents repository, pinned as a git submodule under
+    vendor/OPC-Classic-CoreComponents (clone with submodules — see "Development" in README.md).
 
     Published as a self-contained single-file executable per architecture, e.g. for win-x64:
       dotnet publish -c Release -r win-x64 -p:SelfContained=true -p:PublishSingleFile=true
@@ -12,7 +17,7 @@
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>OIBusOpcClassicWindows</AssemblyName>
@@ -21,13 +26,44 @@
     <Product>OIBus OPC Classic Windows Helper</Product>
     <Company>Optimistik SAS</Company>
     <Copyright>Copyright (c) 2026 Optimistik SAS</Copyright>
-    <Description>Includes OPC Foundation OPC Classic .NET API/RCW redistributables — see THIRD-PARTY-NOTICES.md</Description>
+    <Description>Includes the OPC Foundation OPC Classic .NET API and RCWs (OPC Foundation MIT License 1.00) and the .NET runtime (MIT) — see THIRD-PARTY-NOTICES.md. Not affiliated with or endorsed by the OPC Foundation.</Description>
+    <OpcDotNetRcwsDir>$(MSBuildThisFileDirectory)vendor/OPC-Classic-CoreComponents/DotNetRCWs/</OpcDotNetRcwsDir>
+    <!-- Keep the submodule's own sources out of this project's default Compile/None globs. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);vendor/**</DefaultItemExcludes>
+    <!-- The referenced OPC Foundation projects generate XML docs in Release; don't ship them. -->
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Quick.OpcComRcw" Version="2.1.108" />
-    <PackageReference Include="Quick.OpcNetApi" Version="2.1.108" />
-    <PackageReference Include="Quick.OpcNetApi.Com" Version="2.1.108" />
+    <ProjectReference Include="$(OpcDotNetRcwsDir)OpcComRcw/OpcComRcw.csproj" />
+    <ProjectReference Include="$(OpcDotNetRcwsDir)OpcNetApi/OpcNetApi.csproj" />
+    <ProjectReference Include="$(OpcDotNetRcwsDir)OpcNetApi.Com/OpcNetApi.Com.csproj" />
   </ItemGroup>
+
+  <!--
+    The submodule's DotNetRCWs/NuGet.Config declares a local `.\dist` package source that only
+    their own build.ps1 creates; NuGet fails restore of the referenced projects (NU1301) when it is
+    missing, so create it empty (it is gitignored upstream, the submodule stays clean).
+  -->
+  <Target Name="PrepareOpcDotNetRcws" BeforeTargets="Restore;_GenerateRestoreGraph;CollectPackageReferences;ResolveProjectReferences">
+    <Error Condition="!Exists('$(OpcDotNetRcwsDir)DotNetRCWs.slnx')"
+           Text="vendor/OPC-Classic-CoreComponents is missing — run `git submodule update --init`." />
+    <MakeDir Directories="$(OpcDotNetRcwsDir)dist" />
+  </Target>
+
+  <!--
+    A self-contained publish embeds the .NET runtime, so ship its own LICENSE and third-party
+    notices (taken from the exact runtime pack that was embedded) and the OPC Foundation's license
+    next to every published executable.
+  -->
+  <Target Name="CopyThirdPartyLicensesToPublishDir" AfterTargets="Publish">
+    <ItemGroup>
+      <_EmbeddedRuntimePack Include="@(ResolvedRuntimePack)" Condition="'%(ResolvedRuntimePack.FrameworkName)' == 'Microsoft.NETCore.App'" />
+      <_RuntimePackNotice Include="@(_EmbeddedRuntimePack->'%(PackageDirectory)/LICENSE.TXT')" TargetName="dotnet-runtime-LICENSE.txt" />
+      <_RuntimePackNotice Include="@(_EmbeddedRuntimePack->'%(PackageDirectory)/THIRD-PARTY-NOTICES.TXT')" TargetName="dotnet-runtime-THIRD-PARTY-NOTICES.txt" />
+      <_RuntimePackNotice Include="$(MSBuildThisFileDirectory)vendor/OPC-Classic-CoreComponents/LICENSE.md" TargetName="OPC-Foundation-LICENSE.md" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_RuntimePackNotice)" DestinationFiles="@(_RuntimePackNotice->'$(PublishDir)%(TargetName)')" Condition="Exists('%(Identity)')" />
+  </Target>
 
 </Project>

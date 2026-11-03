@@ -14,6 +14,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The OPC Foundation's OpcNetApi/OpcNetApi.Com/OpcComRcw sources, pinned as a git submodule.
+          submodules: true
 
       - uses: actions/setup-dotnet@v6
         with:
