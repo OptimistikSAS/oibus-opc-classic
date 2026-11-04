@@ -7,11 +7,12 @@ third-party components listed below. They are **not** covered by the EUPL-1.2 an
 their own licenses, reproduced here.
 
 This project is an independent implementation. It is **not affiliated with, sponsored by, or
-endorsed by the OPC Foundation**, and it is not certified by the OPC Foundation. "OPC" and
-"OPC Foundation" are trademarks of the OPC Foundation, used here only to describe the protocols
-and components this package interoperates with.
+endorsed by the OPC Foundation®**, and it is not certified by the OPC Foundation.
+OPC Foundation® and the OPC Foundation logo are registered trademarks of the OPC Foundation. Other
+OPC names (OPC Classic, OPC DA, OPC HDA) are used here only to describe the protocols and
+components this package interoperates with.
 
-## OPC Foundation OPC Classic .NET API and RCWs (`OpcNetApi`, `OpcNetApi.Com`, `OpcComRcw`)
+## OPC Foundation® OPC Classic .NET API and RCWs (`OpcNetApi`, `OpcNetApi.Com`, `OpcComRcw`)
 
 The helper is built against the OPC Foundation's OPC Classic .NET API (`OpcNetApi`), its COM
 wrapper (`OpcNetApi.Com`) and the OPC Classic Runtime Callable Wrapper (`OpcComRcw`). They are

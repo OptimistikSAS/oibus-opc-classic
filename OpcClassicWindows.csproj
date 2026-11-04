@@ -26,7 +26,7 @@
     <Product>OIBus OPC Classic Windows Helper</Product>
     <Company>Optimistik SAS</Company>
     <Copyright>Copyright (c) 2026 Optimistik SAS</Copyright>
-    <Description>Includes the OPC Foundation OPC Classic .NET API and RCWs (OPC Foundation MIT License 1.00) and the .NET runtime (MIT) — see THIRD-PARTY-NOTICES.md. Not affiliated with or endorsed by the OPC Foundation.</Description>
+    <Description>Includes the OPC Foundation® OPC Classic .NET API and RCWs (OPC Foundation MIT License 1.00) and the .NET runtime (MIT) — see THIRD-PARTY-NOTICES.md. Not affiliated with or endorsed by the OPC Foundation.</Description>
     <OpcDotNetRcwsDir>$(MSBuildThisFileDirectory)vendor/OPC-Classic-CoreComponents/DotNetRCWs/</OpcDotNetRcwsDir>
     <!-- Keep the submodule's own sources out of this project's default Compile/None globs. -->
     <DefaultItemExcludes>$(DefaultItemExcludes);vendor/**</DefaultItemExcludes>

@@ -1,7 +1,7 @@
 # @oibus/opc-classic
 
-A Windows-only npm package: a small .NET console app wrapping the OPC Foundation's OPC Classic .NET
-API and RCWs (`OpcNetApi`/`OpcNetApi.Com`/`OpcComRcw`, DCOM interop for OPC Classic DA + HDA), plus the TypeScript driver (`src/index.ts`) that
+A Windows-only npm package: a small .NET console app wrapping the OPC Classic .NET API and RCWs
+of the OPC Foundation® (`OpcNetApi`/`OpcNetApi.Com`/`OpcComRcw`, DCOM interop for OPC Classic DA + HDA), plus the TypeScript driver (`src/index.ts`) that
 spawns and talks to it. A standalone driver for talking to OPC Classic DA/HDA servers from Node.js
 on Windows — no dependency on any other project.
 
