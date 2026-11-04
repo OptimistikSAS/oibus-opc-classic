@@ -73,7 +73,17 @@ works from a normal 64-bit process, with real historized reads confirmed live (r
 aggregate/resampling read that returned cleanly with no error, just no aggregated data for this
 simulator's sparse test data — not a bug). Production OPC HDA servers are essentially always proper
 out-of-process/remote DCOM servers, so the in-process-DLL bitness constraint found here is expected
-to be rare in practice, not the default case.
+to be rare in practice, not the default case. The package ships no 32-bit (`win-x86`) helper: the
+helper's architecture follows Node's, and Node.js has no 32-bit Windows release since v23, so a
+32-bit in-process COM server can't be loaded.
+
+## Helper size and architectures
+
+The helper is published self-contained (it embeds the .NET runtime, nothing to install) and as a
+compressed single file (`EnableCompressionInSingleFile` in `OpcClassicWindows.csproj`): about 36 MB
+per architecture instead of 71–79 MB, at the cost of decompressing its assemblies in memory each time
+it starts. Two architectures are shipped, `runtimes/win-x64/` and `runtimes/win-arm64/`, picked from
+`process.arch`.
 
 ## Architecture
 
@@ -120,13 +130,14 @@ two pkg-bundled instances of the calling application starting around the same ti
 machine (a real scenario — e.g. two separate Windows services, both using this package) can't observe
 or spawn a partially-written file.
 
-The consuming application still needs to tell `pkg` to actually embed the runtime binaries in the
-first place — they won't be picked up automatically. Add this package's `runtimes` folder to the
-consuming application's own `pkg.assets` in its `package.json`:
+The consuming application still needs to tell `pkg` to actually embed the helper in the first
+place — it won't be picked up automatically. Add the `runtimes/<rid>` folder of the architecture
+being built to the consuming application's own `pkg.assets` in its `package.json` — only that one, so
+the bundle doesn't carry the helper of the other architecture:
 
 ```json
 "pkg": {
-  "assets": ["node_modules/@oibus/opc-classic/runtimes/**/*"]
+  "assets": ["node_modules/@oibus/opc-classic/runtimes/win-x64/**/*"]
 }
 ```
 
@@ -213,7 +224,7 @@ dotnet build             # compiles the .NET helper for quick local testing (bin
 - Or build a real self-contained binary into `runtimes/<rid>/`, matching what a published install
   actually ships (see [Release](#release) below):
   ```bash
-  npm run build:win-x64    # or build:win-x86, build:win-arm64, or build:runtimes for all three
+  npm run build:win-x64    # or build:win-arm64, or build:runtimes for both
   ```
 
 To exercise the helper directly without going through the TS layer at all, pipe newline-delimited
@@ -224,7 +235,7 @@ JSON commands at the built exe (see [Protocol](#protocol) above).
 Releases are cut by pushing a `v*` tag (e.g. `v0.1.1`) — see `.github/workflows/publish.yml`. That
 workflow, on a Windows runner:
 
-1. `npm run build:runtimes` — runs `build:win-x64`/`build:win-x86`/`build:win-arm64` (each a plain
+1. `npm run build:runtimes` — runs `build:win-x64`/`build:win-arm64` (each a plain
    `dotnet publish -r <rid> --self-contained -p:PublishSingleFile=true -o runtimes/<rid>`), so the
    same commands can be run locally to reproduce exactly what CI ships.
 2. `npm run build` (the TypeScript side).
