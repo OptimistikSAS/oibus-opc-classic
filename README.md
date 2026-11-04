@@ -23,8 +23,8 @@ by the EUPL:
 - the .NET runtime (self-contained publish), licensed under the **MIT License** (Copyright (c)
   .NET Foundation and Contributors), with its own third-party notices.
 
-The full license texts are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and each
-`runtimes/<rid>/` folder ships them next to the executable.
+The full license texts are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and the
+`runtimes/win-x64/` folder ships them next to the executable.
 
 The native **OPC Core Components** (proxy/stub DLLs, `OpcEnum`) are **not** included: install them
 separately on the target machine with the OPC Foundation's signed installer (or the one your OPC
@@ -77,13 +77,14 @@ to be rare in practice, not the default case. The package ships no 32-bit (`win-
 helper's architecture follows Node's, and Node.js has no 32-bit Windows release since v23, so a
 32-bit in-process COM server can't be loaded.
 
-## Helper size and architectures
+## Helper size and architecture
 
 The helper is published self-contained (it embeds the .NET runtime, nothing to install) and as a
-compressed single file (`EnableCompressionInSingleFile` in `OpcClassicWindows.csproj`): about 36 MB
-per architecture instead of 71–79 MB, at the cost of decompressing its assemblies in memory each time
-it starts. Two architectures are shipped, `runtimes/win-x64/` and `runtimes/win-arm64/`, picked from
-`process.arch`.
+compressed single file (`EnableCompressionInSingleFile` in `OpcClassicWindows.csproj`): about 37 MB
+instead of 71 MB, at the cost of decompressing its assemblies in memory each time it starts.
+
+Only Windows x64 is supported (`runtimes/win-x64/`): on any other architecture (Windows on ARM
+included), `connect()` fails with "Unsupported architecture for the OPC Classic Windows helper".
 
 ## Architecture
 
@@ -131,9 +132,8 @@ machine (a real scenario — e.g. two separate Windows services, both using this
 or spawn a partially-written file.
 
 The consuming application still needs to tell `pkg` to actually embed the helper in the first
-place — it won't be picked up automatically. Add the `runtimes/<rid>` folder of the architecture
-being built to the consuming application's own `pkg.assets` in its `package.json` — only that one, so
-the bundle doesn't carry the helper of the other architecture:
+place — it won't be picked up automatically. Add the `runtimes/win-x64` folder to the consuming
+application's own `pkg.assets` in its `package.json`:
 
 ```json
 "pkg": {
@@ -215,16 +215,16 @@ dotnet build             # compiles the .NET helper for quick local testing (bin
 ```
 
 `dotnet build` is enough to iterate on the .NET side quickly, but its output isn't in the layout
-`resolveOpcBinaryPath()` expects at runtime (`runtimes/<rid>/`). Two ways to bridge that:
+`resolveOpcBinaryPath()` expects at runtime (`runtimes/win-x64/`). Two ways to bridge that:
 
 - Point `resolveOpcBinaryPath()` at the `dotnet build` output directly, for fast iteration:
   ```bash
   $env:OIBUS_OPC_CLASSIC_WINDOWS_BINARY = "$(pwd)\bin\Debug\net10.0-windows\OIBusOpcClassicWindows.exe"
   ```
-- Or build a real self-contained binary into `runtimes/<rid>/`, matching what a published install
+- Or build a real self-contained binary into `runtimes/win-x64/`, matching what a published install
   actually ships (see [Release](#release) below):
   ```bash
-  npm run build:win-x64    # or build:win-arm64, or build:runtimes for both
+  npm run build:win-x64    # same as npm run build:runtimes
   ```
 
 To exercise the helper directly without going through the TS layer at all, pipe newline-delimited
@@ -235,9 +235,9 @@ JSON commands at the built exe (see [Protocol](#protocol) above).
 Releases are cut by pushing a `v*` tag (e.g. `v0.1.1`) — see `.github/workflows/publish.yml`. That
 workflow, on a Windows runner:
 
-1. `npm run build:runtimes` — runs `build:win-x64`/`build:win-arm64` (each a plain
-   `dotnet publish -r <rid> --self-contained -p:PublishSingleFile=true -o runtimes/<rid>`), so the
-   same commands can be run locally to reproduce exactly what CI ships.
+1. `npm run build:runtimes` — runs `build:win-x64` (a plain `dotnet publish -r win-x64
+   --self-contained -p:PublishSingleFile=true -o runtimes/win-x64`), so the same command can be run
+   locally to reproduce exactly what CI ships.
 2. `npm run build` (the TypeScript side).
 3. `npm publish` (scoped public package — `publishConfig.access` in `package.json` is already set
    to `"public"`, so no `--access` flag is needed at publish time).
