@@ -1,7 +1,7 @@
 {
   "name": "@oibus/opc-classic",
   "version": "0.2.1",
-  "description": "Windows-only OPC Classic (DA/HDA) driver for OIBus. Spawns and multiplexes connections over a bundled .NET helper (OPC Foundation OpcNetApi/OpcComRcw DCOM interop, MIT) via a stdio JSON protocol.",
+  "description": "Windows-only OPC Classic (DA/HDA) driver for OIBus. Spawns and multiplexes connections over a bundled .NET helper (OPC Foundation® OpcNetApi/OpcComRcw DCOM interop, MIT) via a stdio JSON protocol.",
   "license": "EUPL-1.2",
   "author": "Optimistik SAS",
   "homepage": "https://github.com/OptimistikSAS/oibus-opc-classic#readme",
