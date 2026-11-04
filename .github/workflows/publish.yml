@@ -34,11 +34,12 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      # One self-contained, single-file build per architecture, published straight into
-      # runtimes/<rid>/ — exactly the layout resolveOpcBinaryPath() expects, and what
-      # package.json's "files" ships. See package.json's build:win-* scripts for the actual
-      # dotnet publish commands — running `npm run build:runtimes` locally does the same thing.
-      - name: Build the .NET helper for every architecture
+      # One self-contained, compressed single-file build for Windows x64 (the only supported
+      # architecture), published straight into runtimes/win-x64/ — exactly the layout
+      # resolveOpcBinaryPath() expects, and what package.json's "files" ships. See package.json's
+      # build:win-x64 script for the actual dotnet publish command — running
+      # `npm run build:runtimes` locally does the same thing.
+      - name: Build the .NET helper
         run: npm run build:runtimes
 
       - name: Build the TypeScript package
