@@ -12,8 +12,9 @@
 
     Published as a self-contained single-file executable per architecture, e.g. for win-x64:
       dotnet publish -c Release -r win-x64 -p:SelfContained=true -p:PublishSingleFile=true
-    (repeat with -r win-x86 and -r win-arm64). The resulting binaries are what get bundled into
-    runtimes/<rid>/ and shipped in the npm package — see the "Release" section in README.md.
+    (repeat with -r win-arm64). The resulting binaries are what get bundled into runtimes/<rid>/
+    and shipped in the npm package — see the "Release" section in README.md. There is no win-x86
+    build: Node.js has no 32-bit Windows release since v23, so no supported Node process could use it.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -30,6 +31,12 @@
     <OpcDotNetRcwsDir>$(MSBuildThisFileDirectory)vendor/OPC-Classic-CoreComponents/DotNetRCWs/</OpcDotNetRcwsDir>
     <!-- Keep the submodule's own sources out of this project's default Compile/None globs. -->
     <DefaultItemExcludes>$(DefaultItemExcludes);vendor/**</DefaultItemExcludes>
+    <!--
+      Compress the assemblies embedded in the single-file executable: about 36 MB instead of 71-79 MB
+      per architecture, at the cost of decompressing them in memory each time the helper starts
+      (once per OIBus process). Only supported for self-contained single-file publishes.
+    -->
+    <EnableCompressionInSingleFile Condition="'$(PublishSingleFile)' == 'true'">true</EnableCompressionInSingleFile>
     <!-- The referenced OPC Foundation projects generate XML docs in Release; don't ship them. -->
     <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
   </PropertyGroup>

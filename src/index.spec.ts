@@ -52,7 +52,7 @@ describe('OpcBridge', () => {
 
     it('throws for an unsupported architecture', () => {
       const originalArch = process.arch;
-      Object.defineProperty(process, 'arch', { value: 'mips' });
+      Object.defineProperty(process, 'arch', { value: 'ia32' });
       try {
         assert.throws(() => resolveOpcBinaryPath(), /Unsupported architecture/);
       } finally {

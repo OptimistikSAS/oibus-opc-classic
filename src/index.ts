@@ -60,9 +60,9 @@ interface OpcResponse {
   nodes?: Array<OpcNode>;
 }
 
+// No 32-bit (ia32) helper: Node.js has no 32-bit Windows release since v23.
 const ARCH_FOLDERS: Partial<Record<NodeJS.Architecture, string>> = {
   x64: 'win-x64',
-  ia32: 'win-x86',
   arm64: 'win-arm64'
 };
 

@@ -1,6 +1,6 @@
 {
   "name": "@oibus/opc-classic",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Windows-only OPC Classic (DA/HDA) driver for OIBus. Spawns and multiplexes connections over a bundled .NET helper (OPC Foundation® OpcNetApi/OpcComRcw DCOM interop, MIT) via a stdio JSON protocol.",
   "license": "EUPL-1.2",
   "author": "Optimistik SAS",
@@ -39,9 +39,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:win-x64": "dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:DebugType=None -o runtimes/win-x64",
-    "build:win-x86": "dotnet publish -c Release -r win-x86 --self-contained -p:PublishSingleFile=true -p:DebugType=None -o runtimes/win-x86",
     "build:win-arm64": "dotnet publish -c Release -r win-arm64 --self-contained -p:PublishSingleFile=true -p:DebugType=None -o runtimes/win-arm64",
-    "build:runtimes": "npm run build:win-x64 && npm run build:win-x86 && npm run build:win-arm64",
+    "build:runtimes": "npm run build:win-x64 && npm run build:win-arm64",
     "test": "node --import tsx --test src/**/*.spec.ts"
   },
   "devDependencies": {
