@@ -24,6 +24,14 @@ class FakeChildProcess extends EventEmitter {
   }
 }
 
+const setPkg = (enabled: boolean) => {
+  if (enabled) {
+    (process as unknown as { pkg?: unknown }).pkg = {};
+  } else {
+    delete (process as unknown as { pkg?: unknown }).pkg;
+  }
+};
+
 const originalPlatform = process.platform;
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { value: platform });
@@ -43,6 +51,29 @@ describe('OpcBridge', () => {
   describe('resolveOpcBinaryPath', () => {
     afterEach(() => {
       delete process.env.OIBUS_OPC_CLASSIC_WINDOWS_BINARY;
+      delete process.env.OIBUS_OPC_CLASSIC_EXTRACT_DIR;
+      setPkg(false);
+      mock.restoreAll();
+    });
+
+    it('extracts the helper into OIBUS_OPC_CLASSIC_EXTRACT_DIR when running under pkg', () => {
+      const extractDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opc-classic-extract-dir-test-'));
+      const originalArch = process.arch;
+      const readFileSync = fs.readFileSync;
+      const bundledPath = path.join(__dirname, '..', 'runtimes', 'win-x64', 'OIBusOpcClassicWindows.exe');
+      mock.method(fs, 'readFileSync', ((file: fs.PathOrFileDescriptor, options?: unknown) =>
+        file === bundledPath ? Buffer.from('bundled helper') : readFileSync(file, options as BufferEncoding)) as typeof fs.readFileSync);
+      Object.defineProperty(process, 'arch', { value: 'x64' });
+      process.env.OIBUS_OPC_CLASSIC_EXTRACT_DIR = extractDir;
+      setPkg(true);
+      try {
+        const resolved = resolveOpcBinaryPath();
+        assert.strictEqual(path.dirname(path.dirname(resolved)), path.join(extractDir, 'oibus-opc-classic'));
+        assert.strictEqual(readFileSync(resolved, 'utf8'), 'bundled helper');
+      } finally {
+        Object.defineProperty(process, 'arch', { value: originalArch });
+        fs.rmSync(extractDir, { recursive: true, force: true });
+      }
     });
 
     it('returns the OIBUS_OPC_CLASSIC_WINDOWS_BINARY override when set', () => {
@@ -61,34 +92,103 @@ describe('OpcBridge', () => {
     });
   });
 
-  // Confirmed directly against a real @yao-pkg/pkg-bundled executable: spawning straight from a
-  // pkg snapshot path (e.g. `C:\snapshot\...\OIBusOpcClassicWindows.exe`) fails with ENOENT even
-  // though the same path reads fine via `fs.readFileSync` — the OS process-creation call needs a
-  // real file, not pkg's virtual filesystem. Exercised here against a throwaway scratch path (not
-  // the package's own real `runtimes/` folder) so this test can't clobber a real build artifact if
-  // it happens to run after `npm run build:win-*` has already populated that folder.
+  // Exercised against throwaway scratch folders (not the package's own `runtimes/` folder or the real temp folder).
   describe('extractFromPkgSnapshotIfNeeded', () => {
-    const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opc-classic-pkg-test-'));
-    const bundledPath = path.join(scratchDir, 'OIBusOpcClassicWindows.exe');
+    let scratchDir: string;
+    let tmpDir: string;
+    let bundledPath: string;
 
     beforeEach(() => {
+      scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'opc-classic-pkg-test-'));
+      tmpDir = path.join(scratchDir, 'tmp');
+      bundledPath = path.join(scratchDir, 'OIBusOpcClassicWindows.exe');
       fs.writeFileSync(bundledPath, 'fake binary contents');
     });
 
     afterEach(() => {
-      delete (process as unknown as { pkg?: unknown }).pkg;
+      setPkg(false);
+      mock.restoreAll();
+      fs.rmSync(scratchDir, { recursive: true, force: true });
     });
 
     it('returns the bundled path unchanged outside of a pkg bundle', () => {
-      assert.strictEqual(extractFromPkgSnapshotIfNeeded(bundledPath), bundledPath);
+      assert.strictEqual(extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir), bundledPath);
+      assert.strictEqual(fs.existsSync(tmpDir), false);
     });
 
-    it('copies the binary to a real temp file and returns that path when running under pkg', () => {
-      (process as unknown as { pkg?: unknown }).pkg = {};
-      const resolved = extractFromPkgSnapshotIfNeeded(bundledPath);
-      assert.notStrictEqual(resolved, bundledPath);
-      assert.ok(resolved.includes('oibus-opc-classic'));
+    it('copies the binary to a folder named after its content when running under pkg', () => {
+      setPkg(true);
+      const resolved = extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir);
+      assert.strictEqual(path.dirname(path.dirname(resolved)), path.join(tmpDir, 'oibus-opc-classic'));
+      assert.match(path.basename(path.dirname(resolved)), /^[0-9a-f]{16}$/);
+      assert.strictEqual(path.basename(resolved), 'OIBusOpcClassicWindows.exe');
       assert.strictEqual(fs.readFileSync(resolved, 'utf8'), 'fake binary contents');
+      assert.deepStrictEqual(fs.readdirSync(path.dirname(resolved)), ['OIBusOpcClassicWindows.exe'], 'no temporary file left');
+    });
+
+    it('reuses an already extracted copy, which may be running', () => {
+      setPkg(true);
+      const first = extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir);
+      const renameSync = mock.method(fs, 'renameSync');
+      assert.strictEqual(extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir), first);
+      assert.strictEqual(renameSync.mock.calls.length, 0);
+    });
+
+    it('extracts another version of the binary to another folder', () => {
+      setPkg(true);
+      const first = extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir);
+      fs.writeFileSync(bundledPath, 'new fake binary contents');
+      const second = extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir);
+      assert.notStrictEqual(second, first);
+      assert.strictEqual(fs.readFileSync(second, 'utf8'), 'new fake binary contents');
+      assert.strictEqual(fs.readFileSync(first, 'utf8'), 'fake binary contents');
+    });
+
+    it('uses the copy of another process that won the extraction race', () => {
+      setPkg(true);
+      mock.method(fs, 'renameSync', (_from: fs.PathLike, to: fs.PathLike) => {
+        fs.writeFileSync(to, 'fake binary contents');
+        throw new Error('EPERM: operation not permitted, rename');
+      });
+      const resolved = extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir);
+      assert.strictEqual(fs.readFileSync(resolved, 'utf8'), 'fake binary contents');
+      assert.deepStrictEqual(fs.readdirSync(path.dirname(resolved)), ['OIBusOpcClassicWindows.exe'], 'temporary file removed');
+    });
+
+    it('replaces an extracted copy that was altered, even with the same size', () => {
+      setPkg(true);
+      const first = extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir);
+      fs.writeFileSync(first, 'FAKE BINARY CONTENTS');
+      assert.strictEqual(extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir), first);
+      assert.strictEqual(fs.readFileSync(first, 'utf8'), 'fake binary contents');
+    });
+
+    it('refuses an altered copy that cannot be replaced (run by another process)', () => {
+      setPkg(true);
+      const first = extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir);
+      fs.writeFileSync(first, 'FAKE BINARY CONTENTS');
+      mock.method(fs, 'renameSync', () => {
+        throw new Error('EBUSY: resource busy or locked, rename');
+      });
+      assert.throws(() => extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir), /SHA-256 mismatch/);
+      assert.deepStrictEqual(fs.readdirSync(path.dirname(first)), ['OIBusOpcClassicWindows.exe'], 'temporary file removed');
+    });
+
+    it('refuses the copy of another process that does not match the bundled binary', () => {
+      setPkg(true);
+      mock.method(fs, 'renameSync', (_from: fs.PathLike, to: fs.PathLike) => {
+        fs.writeFileSync(to, 'tampered contents');
+        throw new Error('EPERM: operation not permitted, rename');
+      });
+      assert.throws(() => extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir), /SHA-256 mismatch/);
+    });
+
+    it('throws when the copy cannot be renamed into place', () => {
+      setPkg(true);
+      mock.method(fs, 'renameSync', () => {
+        throw new Error('EACCES: permission denied, rename');
+      });
+      assert.throws(() => extractFromPkgSnapshotIfNeeded(bundledPath, tmpDir), /EACCES/);
     });
   });
 

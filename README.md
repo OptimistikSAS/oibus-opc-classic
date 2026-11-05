@@ -125,11 +125,22 @@ filesystem (something like `C:\snapshot\...`). Reading such a path with `fs` wor
 real file on the real filesystem, and a snapshot path isn't one. Confirmed directly: spawning the
 helper straight from its snapshot path fails with `ENOENT`, even though `fs.readFileSync` on that
 exact path succeeds. So when `process.pkg` is set (pkg's own marker for "running inside a bundle"),
-`resolveOpcBinaryPath()` copies the embedded binary out to a real file under `os.tmpdir()` first and
-returns that path instead — written via a per-process temp name and an atomic rename into place, so
-two pkg-bundled instances of the calling application starting around the same time on the same
-machine (a real scenario — e.g. two separate Windows services, both using this package) can't observe
-or spawn a partially-written file.
+`resolveOpcBinaryPath()` copies the embedded binary out to
+`<extract dir>/oibus-opc-classic/<content hash>/OIBusOpcClassicWindows.exe` first and returns that path
+instead. The extract dir is the folder named by the `OIBUS_OPC_CLASSIC_EXTRACT_DIR` environment variable,
+or else the temporary folder of the operating system.
+
+The folder is named after the helper's content: several applications on the same machine (two
+separate Windows services, both using this package) share one extracted copy per helper version, an
+already extracted copy is reused (Windows forbids replacing an executable while it runs), and a new
+version goes to its own folder. A copy is written under a per-process temporary name and renamed into
+place (atomic on the same volume), so that no process ever spawns a partially written file.
+
+An extracted copy is only spawned once its SHA-256 matches the embedded helper. A copy altered in the
+extract dir, which may be writable by other users (the temporary folder is), is replaced; when it
+cannot be replaced because another process runs it, the connection fails instead of running it. Point
+`OIBUS_OPC_CLASSIC_EXTRACT_DIR` to a folder only the service account can write to (for OIBus, a folder
+of its data folder, for instance) to keep other users from planting a file there at all.
 
 The consuming application still needs to tell `pkg` to actually embed the helper in the first
 place — it won't be picked up automatically. Add the `runtimes/win-x64` folder to the consuming

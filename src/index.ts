@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+const EXTRACT_DIR_ENV = 'OIBUS_OPC_CLASSIC_EXTRACT_DIR';
+
 export type OpcMode = 'da' | 'hda';
 
 /** {vendorInfo, productVersion, serverState} off the OPC server's own GetStatus() call, gathered once on connect. */
@@ -78,7 +80,8 @@ const ARCH_FOLDERS: Partial<Record<NodeJS.Architecture, string>> = {
  * isn't one (confirmed directly: spawning straight from the snapshot path fails with `ENOENT`, even
  * though the same path reads fine via `fs.readFileSync`). So under `pkg` specifically (detected via
  * the `process.pkg` flag `pkg` sets on the running process — a no-op check outside of a pkg bundle),
- * the binary is copied out to a real temp directory once per process and spawned from there instead.
+ * the binary is copied out to a real file and spawned from there instead (see `extractFromPkgSnapshotIfNeeded`), into
+ * the folder named by OIBUS_OPC_CLASSIC_EXTRACT_DIR, or else the temporary folder of the operating system.
  */
 export function resolveOpcBinaryPath(): string {
   const override = process.env.OIBUS_OPC_CLASSIC_WINDOWS_BINARY;
@@ -90,28 +93,63 @@ export function resolveOpcBinaryPath(): string {
     throw new Error(`Unsupported architecture for the OPC Classic Windows helper: ${process.arch}`);
   }
   const bundledPath = path.join(__dirname, '..', 'runtimes', archFolder, 'OIBusOpcClassicWindows.exe');
-  return extractFromPkgSnapshotIfNeeded(bundledPath);
+  return extractFromPkgSnapshotIfNeeded(bundledPath, process.env[EXTRACT_DIR_ENV] || os.tmpdir());
+}
+
+function sha256(content: Buffer): string {
+  return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+/** Whether the file exists with exactly this SHA-256 */
+function hasHash(filePath: string, hash: string): boolean {
+  try {
+    return sha256(fs.readFileSync(filePath)) === hash;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Exported (not just internal) so this package's own tests can exercise it directly against a safe
- * scratch path — not part of the package's public API for consumers.
+ * Outside of a pkg bundle, returns the bundled path unchanged. Inside one (`process.pkg` is set), copies the binary
+ * out of the snapshot to `<extractDir>/oibus-opc-classic/<content hash>/` and returns that path.
+ *
+ * The folder is named after the binary's content, so that several applications on the same machine (two OIBus
+ * services, for instance) share one extracted copy per helper version: Windows forbids replacing an executable while
+ * it runs, so an already extracted copy is reused, and a new version goes to its own folder. A copy is written to a
+ * per-process temporary name first and then renamed into place (atomic on the same volume), so that no process ever
+ * spawns a partially written file; when another process won the race, its copy is used.
+ *
+ * An extracted copy is only ever spawned after its SHA-256 was checked against the bundled binary: a copy that was
+ * altered in the extraction folder (which may be writable by other users, as the temporary folder is) is replaced, and
+ * when it cannot be replaced (another process runs it), an error is thrown instead of running it.
+ *
+ * Exported for this package's own tests — not part of the public API.
  */
-export function extractFromPkgSnapshotIfNeeded(bundledPath: string): string {
+export function extractFromPkgSnapshotIfNeeded(bundledPath: string, extractDir: string = os.tmpdir()): string {
   if (!('pkg' in process)) {
     return bundledPath;
   }
-  const extractedPath = path.join(os.tmpdir(), 'oibus-opc-classic', path.basename(bundledPath));
+  const content = fs.readFileSync(bundledPath);
+  const hash = sha256(content);
+  const extractedPath = path.join(extractDir, 'oibus-opc-classic', hash.slice(0, 16), path.basename(bundledPath));
+  if (hasHash(extractedPath, hash)) {
+    return extractedPath;
+  }
   fs.mkdirSync(path.dirname(extractedPath), { recursive: true });
-  // Two OIBus instances on the same machine (e.g. a production service and a "Test" service
-  // instance, both pkg-bundled) can both hit this on startup around the same time, both extracting
-  // to this same fixed path. Copy to a per-process-unique temp name first, then rename into place —
-  // a rename is atomic on the same volume on both Windows and POSIX, so a second instance can never
-  // observe (or spawn) a partially-written file the way a direct copyFileSync to the final path
-  // could let it.
   const tempPath = `${extractedPath}.${process.pid}.tmp`;
-  fs.copyFileSync(bundledPath, tempPath);
-  fs.renameSync(tempPath, extractedPath);
+  fs.writeFileSync(tempPath, content);
+  try {
+    fs.renameSync(tempPath, extractedPath);
+  } catch (error) {
+    fs.rmSync(tempPath, { force: true });
+    // Another process extracted (and may already run) the same binary in the meantime: its copy is used, once checked
+    if (!fs.existsSync(extractedPath)) {
+      throw error;
+    }
+  }
+  if (!hasHash(extractedPath, hash)) {
+    throw new Error(`The extracted OPC Classic helper ${extractedPath} does not match the bundled one (SHA-256 mismatch): it was not run`);
+  }
   return extractedPath;
 }
 
